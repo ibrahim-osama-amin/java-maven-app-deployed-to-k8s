@@ -46,8 +46,10 @@ pipeline {
                 script {
                     sshagent(['k8s-ssh-key']) {
                         echo 'Passing the deployment files and deployment script to the k8s cluster'
-                        sh 'scp -o StrictHostKeyChecking=no ../kubernetes/* jenkins@192.168.111.138:/home/jenkins/'
-                        echo 'Setting image name environmental variable'
+                        sh 'scp -o StrictHostKeyChecking=no ../kubernetes/deployment.yaml jenkins@192.168.111.138:/home/jenkins/'
+                        sh 'scp -o StrictHostKeyChecking=no ../kubernetes/service.yaml jenkins@192.168.111.138:/home/jenkins/'
+                        sh 'scp -o StrictHostKeyChecking=no ../kubernetes/server-script.sh jenkins@192.168.111.138:/home/jenkins/'
+                        echo 'Now, the script will start'
                         sh "ssh -o StrictHostKeyChecking=no jenkins@192.168.111.138 bash ./server-script.sh ${IMAGE_NAME}"
                 }
 
