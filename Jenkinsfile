@@ -27,14 +27,16 @@ pipeline {
                 }
             }
         }
-        stage('build image') {
+        stage('build image and push image') {
             steps {
                 script {
                     echo "building the docker image..."
-                    withCredentials([usernamePassword(credentialsId: 'docker-hub', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
-                        sh "docker build -t nanajanashia/demo-app:${IMAGE_NAME} ."
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-repo', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
+                        sh "docker build -t ibrahimosama/my-repo:${IMAGE_NAME} ."
+                        echo 'Logging into Docker...'
                         sh "echo $PASS | docker login -u $USER --password-stdin"
-                        sh "docker push nanajanashia/demo-app:${IMAGE_NAME}"
+                        echo 'Pushing the image to docker repo'
+                        sh "docker push ibrahimosama/my-repo:${IMAGE_NAME}"
                     }
                 }
             }
@@ -42,27 +44,26 @@ pipeline {
         stage('deploy') {
             steps {
                 script {
-                    withKubeConfig([credentialsId: 'k8s-credentials', serverUrl: 'https://7293fae4-4c9d-4629-bc82-262d0a2b8e3c.eu-central-2.linodelke.net']) {
-                        withCredentials([usernamePassword(credentialsId: 'docker-hub', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
-                            sh "kubectl create secret docker-registry my-registry-key --docker-server=docker.io --docker-username=$USER --docker-password=$PASS"
-                        }
-                        sh 'envsubst < kubernetes/deployment.yaml | kubectl apply -f -'
-                    }
+                    sshagent(['k8s-ssh-key']) {
+                        echo 'Passing the deployment files and deployment script to the k8s cluster'
+                        sh 'scp -o StrictHostKeyChecking=no ../kubernetes/* jenkins@192.168.111.138:/home/jenkins/'
+                        echo 'Setting image name environmental variable'
+                        sh "ssh -o StrictHostKeyChecking=no jenkins@192.168.111.138 bash ./server-script.sh ${IMAGE_NAME}"
                 }
+
             }
         }
         stage('commit version update') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'gitlab-credentials', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
+                    withCredentials([usernamePassword(credentialsId: 'github-credentials', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
                         // git config here for the first time run
                         sh 'git config --global user.email "jenkins@example.com"'
                         sh 'git config --global user.name "jenkins"'
-
-                        sh "git remote set-url origin https://${USER}:${PASS}@gitlab.com/nanuchi/java-maven-app.git"
+                        sh "git remote set-url origin https://${USER}:${PASS}@https://github.com/ibrahim-osama-amin/java-maven-app-deployed-to-k8s.git"
                         sh 'git add .'
                         sh 'git commit -m "ci: version bump"'
-                        sh 'git push origin HEAD:jenkins-jobs'
+                        sh 'git push origin HEAD:main'
                     }
                 }
             }
